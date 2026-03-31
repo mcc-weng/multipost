@@ -25,7 +25,14 @@ cd multipost
 pip install -r requirements.txt
 ```
 
-在 Claude Code 裡面輸入：
+安裝 skill：
+
+Install the skill:
+```bash
+mkdir -p ~/.claude/skills && cp skill/SKILL.md ~/.claude/skills/multipost-SKILL.md
+```
+
+然後在 Claude Code 裡面輸入：
 
 Then in Claude Code:
 ```
