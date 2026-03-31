@@ -9,7 +9,7 @@ Post to 6 platforms with one command.
 | 平台 Platform | 內容 Content | 認證 Auth | 費用 Cost |
 |--------------|-------------|-----------|----------|
 | Threads | 文字 Text + topics | Meta token（貼上 paste） | 免費 Free |
-| Instagram | 輪播圖 Carousel (images) | Meta token（貼上 paste） | 免費 Free |
+| Instagram | 圖片 Images (single or carousel) | Meta token（貼上 paste） | 免費 Free |
 | X (Twitter) | 文字 Text | API key 或 Playwright | API: $100/月mo, Playwright: 免費 Free |
 | LinkedIn | 文字 Text + 圖片 images | OAuth 瀏覽器授權 browser flow | 免費 Free |
 | TikTok | 影片 Video | OAuth 瀏覽器授權 browser flow | 免費 Free（先進沙盒 sandbox first） |
@@ -76,8 +76,13 @@ python3 scripts/post_x.py "你的推文 Your tweet"
 ### 圖片貼文 / Image posts
 
 ```bash
-# Instagram（輪播圖 carousel，至少 2 張圖片 URL / min 2 image URLs）
+# Instagram 單張圖 single image（URL 或本機檔案 or local file）
+python3 scripts/post_instagram.py --images "https://url.jpg" "圖片說明 Caption"
+python3 scripts/post_instagram.py --images "/path/to/photo.jpg" "圖片說明 Caption"
+
+# Instagram 輪播圖 carousel（2+ 張圖片 images）
 python3 scripts/post_instagram.py --images "https://url1.jpg,https://url2.jpg" "圖片說明 Caption"
+python3 scripts/post_instagram.py --images "/path/to/a.jpg,/path/to/b.jpg" "圖片說明 Caption"
 ```
 
 ### 影片貼文 / Video posts
@@ -184,7 +189,7 @@ The hardest parts weren't the code — they were the OAuth flows and API approva
 | Port 8789 busy | OAuth 時 port 被佔用 | 腳本會自動試 8789-8799 / Auto-tries 8789-8799 |
 | TikTok 看不到貼文 posts not visible | 沙盒模式 sandbox mode | 到 TikTok 開發者後台送審 Submit app for review |
 | YouTube `No refresh token` | 之前已經授權過 already authorized | 到 myaccount.google.com/permissions 撤銷後重新設定 Revoke and re-setup |
-| Instagram `carousel requires 2+ images` | 只給了 1 張圖 single image | 至少 2 張圖片 URL / Use at least 2 image URLs |
+| Instagram `at least 1 image required` | 沒給圖片 no images | 用 --images 指定至少 1 張 / Use --images with at least 1 image |
 
 ## 專案結構 / Project Structure
 

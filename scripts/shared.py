@@ -58,7 +58,7 @@ def update_env(key: str, value: str) -> None:
 
 
 PLATFORM_VARS: dict[str, list[str]] = {
-    "threads": ["THREADS_ACCESS_TOKEN", "THREADS_USER_ID"],
+    "threads": ["THREADS_ACCESS_TOKEN"],
     "instagram": ["INSTAGRAM_BUSINESS_ACCOUNT_ID", "INSTAGRAM_ACCESS_TOKEN"],
     "x": ["X_API_KEY", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_TOKEN_SECRET"],
     "linkedin": ["LINKEDIN_ACCESS_TOKEN", "LINKEDIN_PERSON_ID"],
@@ -454,8 +454,7 @@ def _setup_threads():
     print("  2. Click 'Create App' -> select 'Business' type")
     print("  3. Add the 'Threads API' product to your app")
     print("  4. Go to Threads API -> API Explorer")
-    print("  5. Generate a long-lived access token")
-    print("  6. Copy your User ID from the same page\n")
+    print("  5. Generate a long-lived access token\n")
     webbrowser.open("https://developers.facebook.com/apps/")
     print("(Opening Meta Developer Portal in your browser...)\n")
     token = input("Paste your Threads access token: ").strip()
@@ -463,16 +462,11 @@ def _setup_threads():
         print("Aborted — no token provided.", file=sys.stderr)
         return False
     update_env("THREADS_ACCESS_TOKEN", token)
-    user_id = input("Paste your Threads user ID: ").strip()
-    if not user_id:
-        print("Aborted — no user ID provided.", file=sys.stderr)
-        return False
-    update_env("THREADS_USER_ID", user_id)
     print("Validating...", file=sys.stderr)
     if validate_token("threads"):
         print("✅ Threads configured successfully!")
         return True
-    print("❌ Validation failed — check your token and user ID.", file=sys.stderr)
+    print("❌ Validation failed — check your token.", file=sys.stderr)
     return False
 
 

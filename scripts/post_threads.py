@@ -8,7 +8,6 @@ Usage:
 
 Requires env vars:
   THREADS_ACCESS_TOKEN — long-lived token (~60 day expiry)
-  THREADS_USER_ID — numeric Threads user ID
 """
 
 import json
@@ -31,7 +30,6 @@ def post_to_threads(text: str, topic: str = None, dry_run: bool = False) -> str:
         sys.exit(1)
 
     token = os.environ.get("THREADS_ACCESS_TOKEN")
-    user_id = os.environ.get("THREADS_USER_ID")
 
     if dry_run:
         topic_str = f" [topic: {topic}]" if topic else ""
@@ -53,7 +51,7 @@ def post_to_threads(text: str, topic: str = None, dry_run: bool = False) -> str:
 
     create_resp = retry_on_5xx(
         lambda: requests.post(
-            f"{BASE_URL}/{user_id}/threads",
+            f"{BASE_URL}/me/threads",
             params=create_params,
         ),
         "create container",
@@ -66,7 +64,7 @@ def post_to_threads(text: str, topic: str = None, dry_run: bool = False) -> str:
     # Step 2: Publish
     publish_resp = retry_on_5xx(
         lambda: requests.post(
-            f"{BASE_URL}/{user_id}/threads_publish",
+            f"{BASE_URL}/me/threads_publish",
             params={
                 "creation_id": creation_id,
                 "access_token": token,

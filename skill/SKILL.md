@@ -69,11 +69,17 @@ python3 scripts/post_linkedin.py "Post text here"
 
 #### Image platform (Instagram)
 
-Ask for image URLs first:
-> "Instagram requires at least 2 images for a carousel. Paste the URLs (comma-separated):"
+Ask for images (1 for single post, 2+ for carousel). Accepts URLs or local file paths:
+> "Paste image URLs or local file paths (comma-separated, 1 for single image, 2+ for carousel):"
 
 ```bash
+# Single image
+python3 scripts/post_instagram.py --images "/path/to/photo.jpg" "Caption text"
+python3 scripts/post_instagram.py --images "https://example.com/photo.jpg" "Caption text"
+
+# Carousel (2+ images)
 python3 scripts/post_instagram.py --images "url1,url2" "Caption text"
+python3 scripts/post_instagram.py --images "/path/a.jpg,/path/b.jpg" "Caption text"
 ```
 
 #### Video platforms (TikTok, YouTube)
