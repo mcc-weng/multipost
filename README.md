@@ -20,7 +20,7 @@ Post to 6 platforms with one command.
 ### With Claude Code (recommended)
 
 ```bash
-git clone https://github.com/mikeweng/multipost.git
+git clone https://github.com/mcc-weng/multipost.git
 cd multipost
 pip install -r requirements.txt
 ```
@@ -35,7 +35,7 @@ Claude walks you through connecting each platform.
 ### Without Claude Code
 
 ```bash
-git clone https://github.com/mikeweng/multipost.git
+git clone https://github.com/mcc-weng/multipost.git
 cd multipost
 pip install -r requirements.txt
 python3 configure.py
