@@ -29,7 +29,7 @@ pip install -r requirements.txt
 
 Install the skill:
 ```bash
-mkdir -p ~/.claude/skills && cp skill/SKILL.md ~/.claude/skills/multipost-SKILL.md
+mkdir -p ~/.claude/skills/multipost && cp skill/SKILL.md ~/.claude/skills/multipost/SKILL.md
 ```
 
 然後在 Claude Code 裡面輸入：
