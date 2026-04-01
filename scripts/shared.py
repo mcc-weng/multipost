@@ -634,18 +634,18 @@ def _setup_instagram():
 
 
 def _setup_x():
-    """Guide user through X setup. Warns about $100/month cost."""
+    """Guide user through X setup."""
     zh = _detect_lang() == "zh"
     if zh:
         print("\n=== X (Twitter) 設定 ===\n")
-        print("X API 需要 Basic 方案（$100/月）才能發文。")
+        print("X API 採用按量付費模式。")
         print("用 Claude Code skill 可以免費透過瀏覽器自動化發文。\n")
-        choice = input("還是要設定 X API？(y/n): ").strip().lower()
+        choice = input("要設定 X API 嗎？(y/n): ").strip().lower()
     else:
         print("\n=== X (Twitter) Setup ===\n")
-        print("X API requires the Basic tier ($100/month) for posting.")
+        print("X API uses a pay-per-usage model.")
         print("If you use the Claude Code skill, you can post to X for FREE via browser automation.\n")
-        choice = input("Set up X API anyway? (y/n): ").strip().lower()
+        choice = input("Set up X API? (y/n): ").strip().lower()
     if choice != "y":
         print("已跳過 X 設定。" if zh else "Skipped X setup. Use the Claude Code skill for free X posting.")
         return False

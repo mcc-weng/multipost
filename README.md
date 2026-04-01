@@ -10,7 +10,7 @@ Post to 6 platforms with one command.
 |--------------|-------------|-----------|----------|
 | Threads | 文字 Text + topics | Meta token（貼上 paste） | 免費 Free |
 | Instagram | 圖片 Images (single or carousel) | Meta token（貼上 paste） | 免費 Free |
-| X (Twitter) | 文字 Text | API key 或 Playwright | API: $100/月mo, Playwright: 免費 Free |
+| X (Twitter) | 文字 Text | API key 或 Playwright | API: 按量付費 pay-per-use, Playwright: 免費 Free |
 | LinkedIn | 文字 Text + 圖片 images | OAuth 瀏覽器授權 browser flow | 免費 Free |
 | TikTok | 影片 Video | OAuth 瀏覽器授權 browser flow | 免費 Free（先進沙盒 sandbox first） |
 | YouTube | 影片 Video | OAuth 瀏覽器授權 browser flow | 免費 Free |
@@ -178,9 +178,9 @@ The wizard: Guides app creation → Asks for Client ID + Secret → Opens browse
 
 ### X (Twitter)
 
-X API 需要 Basic 方案（$100/月）才能發文，設定精靈會提醒你費用，可以跳過
+X API 採用按量付費模式，設定精靈會引導你建立開發者 App
 
-X API requires Basic tier ($100/month) for posting. The wizard warns about cost — you can skip.
+X API uses a pay-per-usage model. The wizard guides you through creating a developer app.
 
 用 Claude Code skill 的話可以免費透過 Playwright 瀏覽器自動化發文
 
@@ -208,20 +208,6 @@ python3 scripts/refresh_tokens.py threads      # 更新特定平台 / Refresh on
 會自動更新 / Auto-refreshes: Threads, Instagram, TikTok, LinkedIn
 
 不需要更新 / No refresh needed: YouTube（每次自動換 auto per request）, X（token 不會過期 never expires）
-
-## 怎麼做的 / How I Built This
-
-大部分的 code 不是我自己寫的
-
-I didn't write most of this code by hand.
-
-我跟 Claude Code 說我需要什麼——能發文到 6 個平台的 Python 腳本，處理 OAuth，自動更新 token。Claude Code 寫好腳本，我測試、修 auth 問題、反覆調整。全部搞定花了一個 session
-
-I told Claude Code what I needed — Python scripts that post to 6 platforms, handle OAuth, and refresh tokens. Claude Code wrote the scripts. I tested each one, fixed auth issues, and iterated. Total time: one session.
-
-最難的不是寫 code，是搞各平台的 OAuth 和 API 審核。每個平台都有自己的認證流程。6 個平台全部設定好大概要一天
-
-The hardest parts weren't the code — they were the OAuth flows and API approvals. Each platform has its own auth dance. Budget a day for setup if you're doing all 6.
 
 ## 疑難排解 / Troubleshooting
 

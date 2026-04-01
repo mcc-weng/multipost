@@ -11,7 +11,7 @@ Requires env vars:
   X_ACCESS_TOKEN — user access token
   X_ACCESS_TOKEN_SECRET — user access token secret
 
-Note: Requires X API Basic tier ($100/month) for write access.
+Note: X API uses a pay-per-usage model for write access.
 """
 
 import json

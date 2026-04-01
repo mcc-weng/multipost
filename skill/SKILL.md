@@ -86,7 +86,7 @@ python3 scripts/post_youtube.py --short --media /path/to/video.mp4 --title "Titl
 
 #### X (Playwright fallback — free, no API needed)
 
-X API costs $100/month. Use Playwright browser automation instead:
+X API uses pay-per-usage pricing. Use Playwright browser automation instead (free):
 
 1. `browser_navigate` to `https://x.com/compose/post`
 2. `browser_snapshot` — check if login page appears
@@ -174,5 +174,5 @@ python3 scripts/refresh_tokens.py threads      # Specific platform
 - NEVER modify the post text — post exactly what was approved
 - Always check platform status before posting
 - Suggest dry-run on first use
-- For X: prefer Playwright over API (free vs $100/month)
+- For X: prefer Playwright over API (free vs pay-per-usage)
 - For RED: always manual (no API exists)
