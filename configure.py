@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from scripts.shared import load_env, check_setup, check_all, ensure_setup, validate_token, PLATFORM_VARS
+from scripts.shared import load_env, check_setup, check_all, ensure_setup, validate_token, PLATFORM_VARS, _SETUP_FUNCTIONS
 
 ALL_PLATFORMS = ["threads", "instagram", "x", "linkedin", "tiktok", "youtube"]
 
@@ -39,19 +39,32 @@ def show_status():
     print()
 
 
+def setup_platform(platform):
+    """Run setup for a platform, even if already configured."""
+    setup_fn = _SETUP_FUNCTIONS.get(platform)
+    if not setup_fn:
+        print(f"Error: Unknown platform '{platform}'", file=sys.stderr)
+        return False
+    return setup_fn()
+
+
 def setup_all():
-    """Walk through setup for each unconfigured platform."""
+    """Walk through setup for each platform."""
     load_env()
     print("\nmultipost — setup wizard\n")
     for platform in ALL_PLATFORMS:
-        if check_setup(platform):
-            print(f"  ✅ {platform} — already configured, skipping")
-            continue
-        choice = input(f"\nSet up {platform}? (y/n): ").strip().lower()
-        if choice == "y":
-            ensure_setup(platform, interactive=True)
+        configured = check_setup(platform)
+        if configured:
+            choice = input(f"\n{platform} is already configured. Reconfigure? (y/n): ").strip().lower()
+            if choice != "y":
+                print(f"  ⏭️  Skipped {platform}")
+                continue
         else:
-            print(f"  ⏭️  Skipped {platform}")
+            choice = input(f"\nSet up {platform}? (y/n): ").strip().lower()
+            if choice != "y":
+                print(f"  ⏭️  Skipped {platform}")
+                continue
+        setup_platform(platform)
 
     print("\n--- Final Status ---")
     show_status()
@@ -80,7 +93,7 @@ def main():
             print(f"Available: {', '.join(ALL_PLATFORMS)}", file=sys.stderr)
             sys.exit(1)
         load_env()
-        ensure_setup(platform, interactive=True)
+        setup_platform(platform)
     else:
         setup_all()
 
