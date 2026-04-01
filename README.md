@@ -170,11 +170,92 @@ Prerequisite: You need an Instagram Business or Creator account (not personal).
 
 **注意 / Note:** 本機圖片上傳需要 ngrok / Local image uploads require ngrok（`brew install ngrok && ngrok authtoken YOUR_TOKEN`）
 
-### LinkedIn、TikTok、YouTube（OAuth）
+### LinkedIn
 
-設定精靈會：引導你建立開發者 App → 貼上 Client ID 和 Secret → 自動開瀏覽器跑 OAuth → 存 token 到 .env
+1. **建立 LinkedIn App / Create a LinkedIn App**
+   - 去 https://www.linkedin.com/developers/apps → 點「Create App」/ Go to https://www.linkedin.com/developers/apps → Click "Create App"
+   - LinkedIn Page：用你自己的專頁，或輸入「Default Company Page for Individual Developer」/ Use your own page, or type "Default Company Page for Individual Developer"
+   - 上傳一張 App logo 圖片 / Upload a photo for the App logo
 
-The wizard: Guides app creation → Asks for Client ID + Secret → Opens browser for OAuth → Saves tokens to .env
+2. **申請產品權限 / Request product access**
+   - 在「Products」分頁，申請「Share on LinkedIn」/ Under "Products" tab, request "Share on LinkedIn"
+   - 申請「Sign In with LinkedIn using OpenID Connect」/ Request "Sign In with LinkedIn using OpenID Connect"
+
+3. **設定 OAuth / Configure OAuth**
+   - 在「Auth」分頁，加 redirect URL: `http://localhost:8789/callback` / Under "Auth" tab, add redirect URL
+
+4. **複製憑證 / Copy credentials**
+   - 在「Auth」分頁複製 Client ID 和 Client Secret / Copy Client ID and Client Secret from the "Auth" tab
+   - 打開 `.env`，加上 / Open `.env` and add：
+     `LINKEDIN_CLIENT_ID=your_client_id`
+     `LINKEDIN_CLIENT_SECRET=your_client_secret`
+
+5. **跑 OAuth 流程 / Run OAuth flow**
+   - 跑 `python3 configure.py linkedin`，會自動開瀏覽器授權並存 token 到 `.env`
+   - Run `python3 configure.py linkedin` — it opens a browser for OAuth and auto-saves tokens to `.env`
+
+### TikTok
+
+注意：目前只支援 Sandbox 模式。Sandbox 模式下貼文只會發到私人帳號，別人看不到。如果需要公開發文，需要用公開網域驗證 URL 並送審。
+
+Note: Currently only Sandbox mode is supported. In Sandbox mode, posts are only visible on your private account. To post publicly, you need to verify your URL with a public domain and submit for review.
+
+1. **建立 TikTok App / Create a TikTok App**
+   - 去 https://developers.tiktok.com/apps/ → 點「Connect an app」→ 選「Individual」/ Go to https://developers.tiktok.com/apps/ → Click "Connect an app" → select "Individual"
+   - 選擇 Sandbox 模式 / Select Sandbox mode
+
+2. **填寫 App 資訊 / Fill in App details**
+   - 填寫 App Icon、App name、Category、Description / Fill in App Icon, App name, Category, Description
+   - 填寫 Terms of Service URL 和 Privacy Policy URL / Fill in Terms of Service URL and Privacy Policy URL
+
+3. **設定平台 / Configure platform**
+   - Platforms 只選「Desktop」/ For Platforms, only select "Desktop"
+   - Desktop URL 填 `http://localhost:8789` / Set Desktop URL to `http://localhost:8789`
+
+4. **新增產品 / Add products**
+   - 新增「Login Kit」/ Add "Login Kit"
+   - 在 Login Kit 加 redirect URL: `http://localhost:8789/callback` / In Login Kit, add redirect URL
+   - 新增「Content Posting API」/ Add "Content Posting API"
+
+5. **新增帳號並複製憑證 / Add account and copy credentials**
+   - 加你的 TikTok 帳號 / Add your TikTok account
+   - 複製 Client Key 和 Client Secret / Copy Client Key and Client Secret
+   - 打開 `.env`，加上 / Open `.env` and add：
+     `TIKTOK_CLIENT_KEY=your_client_key`
+     `TIKTOK_CLIENT_SECRET=your_client_secret`
+
+6. **跑 OAuth 流程 / Run OAuth flow**
+   - 跑 `python3 configure.py tiktok`，會自動開瀏覽器授權並存 token 到 `.env`
+   - Run `python3 configure.py tiktok` — it opens a browser for OAuth and auto-saves tokens to `.env`
+
+### YouTube
+
+1. **建立 Google Cloud 專案 / Create a Google Cloud project**
+   - 去 https://console.cloud.google.com/ → 建立新專案（或用現有的）/ Go to https://console.cloud.google.com/ → Create a new project (or use existing)
+
+2. **啟用 YouTube Data API v3 / Enable the YouTube Data API v3**
+   - 在專案中去 APIs & Services → Library / In your project, go to APIs & Services → Library
+   - 搜尋「YouTube Data API v3」→ 點啟用 / Search for "YouTube Data API v3" → click Enable
+
+3. **設定 OAuth consent screen / Configure OAuth consent screen**
+   - 去 APIs & Services → OAuth consent screen / Go to APIs & Services → OAuth consent screen
+   - 填 App name 和 User support email / Fill in App name and User support email
+   - 去「Audience」→ 點「+Add Users」→ 加你的 email 為測試使用者 / Go to "Audience" → click "+Add Users" → add your email as a test user
+   - 去「Data Access」→ 點「Add or Remove Scopes」→ 加 scope: `https://www.googleapis.com/auth/youtube.upload` / Go to "Data Access" → click "Add or Remove Scopes" → add scope
+
+4. **建立 OAuth 2.0 憑證 / Create OAuth 2.0 credentials**
+   - 去 APIs & Services → Credentials / Go to APIs & Services → Credentials
+   - 點 Create Credentials → OAuth client ID / Click Create Credentials → OAuth client ID
+   - Application type 選 Web application / Select Web application
+   - 加 `http://localhost:8789/callback` 為 Authorized redirect URI（必須是 8789）/ Add as Authorized redirect URI (must be 8789)
+   - 複製 Client ID 和 Client Secret / Copy Client ID and Client Secret
+   - 打開 `.env`，加上 / Open `.env` and add：
+     `YOUTUBE_CLIENT_ID=your_client_id`
+     `YOUTUBE_CLIENT_SECRET=your_client_secret`
+
+5. **跑 OAuth 流程 / Run OAuth flow**
+   - 跑 `python3 configure.py youtube`，會自動開瀏覽器授權並存 refresh token 到 `.env`
+   - Run `python3 configure.py youtube` — it opens a browser for OAuth and auto-saves the refresh token to `.env`
 
 ### X (Twitter)
 
