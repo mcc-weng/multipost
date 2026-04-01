@@ -468,6 +468,55 @@ def validate_token(platform):
     return False
 
 
+# --- Interactive Setup Helpers ---
+
+def _prompt_and_validate(env_key, prompt_zh, prompt_en, platform, zh):
+    """Prompt user for a token, validate it, and offer retry/skip on failure.
+    Returns True if token is valid and saved, False if skipped.
+    """
+    while True:
+        current = os.environ.get(env_key, "")
+        if current:
+            if zh:
+                print(f"\n{env_key} 已設定。")
+                choice = input("要重新輸入嗎？(y/n): ").strip().lower()
+            else:
+                print(f"\n{env_key} is already set.")
+                choice = input("Re-enter? (y/n): ").strip().lower()
+            if choice != "y":
+                print("驗證中..." if zh else "Validating...", file=sys.stderr)
+                if validate_token(platform):
+                    print("✅ " + ("驗證成功！" if zh else "Valid!"))
+                    return True
+                if zh:
+                    print("❌ 驗證失敗。")
+                    choice = input("重新輸入 (r) / 跳過 (s)? ").strip().lower()
+                else:
+                    print("❌ Validation failed.")
+                    choice = input("Retry (r) / Skip (s)? ").strip().lower()
+                if choice == "s":
+                    return False
+                continue
+
+        token = input(prompt_zh if zh else prompt_en).strip()
+        if not token:
+            print("已取消。" if zh else "Aborted.", file=sys.stderr)
+            return False
+        update_env(env_key, token)
+        print("驗證中..." if zh else "Validating...", file=sys.stderr)
+        if validate_token(platform):
+            print("✅ " + ("驗證成功！" if zh else "Valid!"))
+            return True
+        if zh:
+            print("❌ 驗證失敗 — 請檢查 token。")
+            choice = input("重新輸入 (r) / 跳過 (s)? ").strip().lower()
+        else:
+            print("❌ Validation failed — check your token.")
+            choice = input("Retry (r) / Skip (s)? ").strip().lower()
+        if choice == "s":
+            return False
+
+
 # --- Interactive Setup ---
 
 def _detect_lang():
@@ -542,18 +591,13 @@ def _setup_threads():
         print("   - Copy the access token")
     print()
     webbrowser.open("https://developers.facebook.com/apps/")
-    prompt = "貼上你的 Threads access token: " if zh else "Paste your Threads access token: "
     print(("正在開啟 Meta 開發者後台..." if zh else "(Opening Meta Developer Portal in your browser...)") + "\n")
-    token = input(prompt).strip()
-    if not token:
-        print("已取消。" if zh else "Aborted — no token provided.", file=sys.stderr)
-        return False
-    update_env("THREADS_ACCESS_TOKEN", token)
-    print("驗證中..." if zh else "Validating...", file=sys.stderr)
-    if validate_token("threads"):
+    if _prompt_and_validate("THREADS_ACCESS_TOKEN",
+                            "貼上你的 Threads access token: ",
+                            "Paste your Threads access token: ",
+                            "threads", zh):
         print("✅ Threads 設定完成！" if zh else "✅ Threads configured successfully!")
         return True
-    print("❌ 驗證失敗 — 請檢查 token。" if zh else "❌ Validation failed — check your token.", file=sys.stderr)
     return False
 
 
@@ -620,21 +664,24 @@ def _setup_instagram():
     print()
     webbrowser.open("https://developers.facebook.com/apps/")
     print(("正在開啟 Meta 開發者後台..." if zh else "(Opening Meta Developer Portal in your browser...)") + "\n")
-    token = input("貼上你的 Instagram access token: " if zh else "Paste your Instagram access token: ").strip()
-    if not token:
-        print("已取消。" if zh else "Aborted.", file=sys.stderr)
+    if not _prompt_and_validate("INSTAGRAM_ACCESS_TOKEN",
+                                "貼上你的 Instagram access token: ",
+                                "Paste your Instagram access token: ",
+                                "instagram", zh):
         return False
-    update_env("INSTAGRAM_ACCESS_TOKEN", token)
-    print("驗證中..." if zh else "Validating...", file=sys.stderr)
-    if not validate_token("instagram"):
-        print("❌ 驗證失敗 — 請檢查 token。" if zh else "❌ Validation failed — check your token.", file=sys.stderr)
-        return False
-    print("✅ Instagram token 驗證成功！" if zh else "✅ Instagram token validated!")
 
     # Check ngrok setup for local image uploads
     ngrok_token = os.environ.get("NGROK_AUTHTOKEN", "")
+    print()
+    if ngrok_token:
+        print("✅ ngrok " + ("已設定。" if zh else "already configured."))
+        choice = input("重新輸入嗎？(y/n): " if zh else "Re-enter? (y/n): ").strip().lower()
+        if choice != "y":
+            pass  # keep existing
+        else:
+            ngrok_token = ""  # fall through to setup below
+
     if not ngrok_token:
-        print()
         if zh:
             print("--- ngrok 設定（本機圖片上傳需要）---\n")
             print("Instagram API 需要公開 URL 來上傳圖片。")
