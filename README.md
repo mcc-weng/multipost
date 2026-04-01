@@ -17,34 +17,6 @@ Post to 6 platforms with one command.
 
 ## 快速開始 / Quick Start
 
-### 用 Claude Code（推薦）/ With Claude Code (recommended)
-
-```bash
-git clone https://github.com/mcc-weng/multipost.git
-cd multipost
-pip install -r requirements.txt
-```
-
-安裝 skill：
-
-Install the skill:
-```bash
-mkdir -p ~/.claude/skills/multipost && cp skill/SKILL.md ~/.claude/skills/multipost/SKILL.md
-```
-
-然後在 Claude Code 裡面輸入：
-
-Then in Claude Code:
-```
-> set up multipost
-```
-
-Claude 會一步一步帶你設定每個平台
-
-Claude walks you through connecting each platform.
-
-### 不用 Claude Code / Without Claude Code
-
 ```bash
 git clone https://github.com/mcc-weng/multipost.git
 cd multipost
@@ -57,11 +29,25 @@ python3 configure.py
 The setup wizard guides you through each platform interactively, with bilingual support.
 
 ```bash
-python3 configure.py                # 自動偵測語言 / Auto-detect language
-python3 configure.py --lang zh      # 強制中文 / Force Chinese
-python3 configure.py --lang en      # 強制英文 / Force English
+python3 configure.py                    # 自動偵測語言 / Auto-detect language
+python3 configure.py --lang zh          # 強制中文 / Force Chinese
+python3 configure.py --lang en          # 強制英文 / Force English
 python3 configure.py --lang zh threads  # 中文，只設定 Threads / Chinese, Threads only
+python3 configure.py --status           # 查看狀態 / Check status
 ```
+
+### 搭配 Claude Code / With Claude Code
+
+安裝 skill 讓 Claude 幫你發文：
+
+Install the skill so Claude can post for you:
+```bash
+mkdir -p ~/.claude/skills/multipost && cp skill/SKILL.md ~/.claude/skills/multipost/SKILL.md
+```
+
+然後在 Claude Code 裡面說「post to threads」或「發文到 Instagram」，Claude 會幫你發
+
+Then tell Claude "post to threads" or "post everywhere" and it handles the rest.
 
 ## 使用方式 / Usage
 
