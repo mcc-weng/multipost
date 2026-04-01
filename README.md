@@ -168,7 +168,9 @@ Prerequisite: You need an Instagram Business or Creator account (not personal).
    - 複製 access token / Copy access token
    - 打開 `.env`，加上 / Open `.env` and add：`INSTAGRAM_ACCESS_TOKEN=your_token_here`
 
-**注意 / Note:** 本機圖片上傳需要 ngrok / Local image uploads require ngrok（`brew install ngrok && ngrok authtoken YOUR_TOKEN`）
+**注意 / Note:** 本機圖片上傳需要 ngrok token（已包含在 pip install 中）。去 https://dashboard.ngrok.com/get-started/your-authtoken 取得免費 token，加到 `.env`：`NGROK_AUTHTOKEN=your_token`
+
+Local image uploads require an ngrok token (pyngrok is included in pip install). Get your free token at https://dashboard.ngrok.com/get-started/your-authtoken and add to `.env`: `NGROK_AUTHTOKEN=your_token`
 
 ### LinkedIn
 

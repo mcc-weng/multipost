@@ -20,7 +20,6 @@ Requires env vars:
 import http.server
 import json
 import os
-import subprocess
 import sys
 import threading
 import time
@@ -51,12 +50,31 @@ class _LocalFileServer:
     def __init__(self, file_paths):
         self.file_paths = file_paths  # list of Path objects
         self.port = 19876
-        self.ngrok_process = None
         self.server = None
         self.tunnel_url = None
+        self._ngrok_tunnel = None
 
     def start(self):
         """Start local HTTP server and ngrok tunnel. Returns base tunnel URL."""
+        try:
+            from pyngrok import ngrok, conf
+        except ImportError:
+            print("Error: pyngrok is required for local file uploads.", file=sys.stderr)
+            print("Install it: pip install pyngrok", file=sys.stderr)
+            sys.exit(1)
+
+        # Check if ngrok authtoken is configured
+        ngrok_config = conf.get_default().auth_token
+        if not ngrok_config:
+            token = os.environ.get("NGROK_AUTHTOKEN", "")
+            if not token:
+                print("Error: ngrok auth token not configured.", file=sys.stderr)
+                print("Get your free token at: https://dashboard.ngrok.com/get-started/your-authtoken", file=sys.stderr)
+                print("Then run: ngrok authtoken YOUR_TOKEN", file=sys.stderr)
+                print("Or set NGROK_AUTHTOKEN in your .env file.", file=sys.stderr)
+                sys.exit(1)
+            ngrok.set_auth_token(token)
+
         file_map = {}
         for p in self.file_paths:
             file_map[f"/{p.name}"] = p
@@ -85,34 +103,12 @@ class _LocalFileServer:
         self.server = http.server.HTTPServer(("127.0.0.1", self.port), Handler)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 
-        # Kill any existing ngrok sessions
-        subprocess.run(["pkill", "-f", "ngrok"], capture_output=True)
-        time.sleep(1)
-
-        # Start ngrok
-        self.ngrok_process = subprocess.Popen(
-            ["ngrok", "http", str(self.port)],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-
-        # Wait for tunnel URL via ngrok local API
-        deadline = time.time() + 10
-        while time.time() < deadline:
-            time.sleep(1)
-            try:
-                resp = requests.get("http://127.0.0.1:4040/api/tunnels", timeout=2)
-                if resp.ok:
-                    tunnels = resp.json().get("tunnels", [])
-                    for t in tunnels:
-                        url = t.get("public_url", "")
-                        if url.startswith("https://"):
-                            self.tunnel_url = url
-                            return url
-            except requests.ConnectionError:
-                continue
-
-        self.stop()
-        raise RuntimeError("Failed to start ngrok tunnel. Is ngrok installed and authenticated?")
+        # Start ngrok tunnel via pyngrok
+        self._ngrok_tunnel = ngrok.connect(self.port, "http")
+        self.tunnel_url = self._ngrok_tunnel.public_url
+        if self.tunnel_url.startswith("http://"):
+            self.tunnel_url = self.tunnel_url.replace("http://", "https://", 1)
+        return self.tunnel_url
 
     def get_url(self, file_path):
         """Get the public URL for a local file."""
@@ -120,9 +116,9 @@ class _LocalFileServer:
 
     def stop(self):
         """Shut down ngrok and local server."""
-        if self.ngrok_process:
-            self.ngrok_process.terminate()
-            self.ngrok_process.wait()
+        if self._ngrok_tunnel:
+            from pyngrok import ngrok
+            ngrok.disconnect(self._ngrok_tunnel.public_url)
         if self.server:
             self.server.shutdown()
 

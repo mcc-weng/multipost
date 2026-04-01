@@ -147,8 +147,9 @@ python3 scripts/post_threads.py --dry-run "Post text"
 
 ## Prerequisites
 
-- **ngrok**: Required for Instagram local image uploads. Install: `brew install ngrok && ngrok authtoken YOUR_TOKEN`
-  - Get your authtoken at https://dashboard.ngrok.com/get-started/your-authtoken
+- **ngrok token**: Required for Instagram local image uploads (pyngrok is included in pip install).
+  - Get your free authtoken at https://dashboard.ngrok.com/get-started/your-authtoken
+  - Add `NGROK_AUTHTOKEN=your_token` to `.env`, or run `ngrok authtoken YOUR_TOKEN`
 
 ## Error Handling
 
@@ -156,7 +157,7 @@ python3 scripts/post_threads.py --dry-run "Post text"
 - **403 error**: API permissions issue. Check platform developer portal.
 - **Script not found**: User isn't in the multipost directory. `cd ~/Projects/multipost`
 - **Platform not configured**: Tell user to run `python3 configure.py [platform]` in their terminal
-- **ngrok tunnel failed**: Make sure ngrok is installed and authenticated. Kill stale sessions: `pkill -f ngrok`
+- **ngrok tunnel failed**: Make sure `NGROK_AUTHTOKEN` is set in `.env` or run `ngrok authtoken YOUR_TOKEN`
 - **Instagram aspect ratio error**: Image must be between 4:5 and 1.91:1 ratio
 
 ## Token Refresh

@@ -626,11 +626,44 @@ def _setup_instagram():
         return False
     update_env("INSTAGRAM_ACCESS_TOKEN", token)
     print("驗證中..." if zh else "Validating...", file=sys.stderr)
-    if validate_token("instagram"):
-        print("✅ Instagram 設定完成！" if zh else "✅ Instagram configured successfully!")
-        return True
-    print("❌ 驗證失敗 — 請檢查 token。" if zh else "❌ Validation failed — check your token.", file=sys.stderr)
-    return False
+    if not validate_token("instagram"):
+        print("❌ 驗證失敗 — 請檢查 token。" if zh else "❌ Validation failed — check your token.", file=sys.stderr)
+        return False
+    print("✅ Instagram token 驗證成功！" if zh else "✅ Instagram token validated!")
+
+    # Check ngrok setup for local image uploads
+    ngrok_token = os.environ.get("NGROK_AUTHTOKEN", "")
+    if not ngrok_token:
+        print()
+        if zh:
+            print("--- ngrok 設定（本機圖片上傳需要）---\n")
+            print("Instagram API 需要公開 URL 來上傳圖片。")
+            print("我們用 ngrok 建立臨時通道來處理本機檔案上傳。\n")
+            print("1. 去 https://dashboard.ngrok.com/signup 註冊免費帳號")
+            print("2. 去 https://dashboard.ngrok.com/get-started/your-authtoken 複製 token")
+            print("3. 貼上 token\n")
+        else:
+            print("--- ngrok Setup (required for local image uploads) ---\n")
+            print("Instagram API requires a public URL to upload images.")
+            print("We use ngrok to create a temporary tunnel for local file uploads.\n")
+            print("1. Sign up for a free account at https://dashboard.ngrok.com/signup")
+            print("2. Copy your token from https://dashboard.ngrok.com/get-started/your-authtoken")
+            print("3. Paste it below\n")
+        webbrowser.open("https://dashboard.ngrok.com/get-started/your-authtoken")
+        ngrok_input = input("貼上 ngrok authtoken（跳過請按 Enter）: " if zh else "Paste ngrok authtoken (press Enter to skip): ").strip()
+        if ngrok_input:
+            update_env("NGROK_AUTHTOKEN", ngrok_input)
+            print("✅ ngrok " + ("設定完成！" if zh else "configured!"))
+        else:
+            if zh:
+                print("⏭️  已跳過 ngrok。之後可以在 .env 加 NGROK_AUTHTOKEN=your_token")
+                print("   沒有 ngrok 的話只能用 URL 上傳圖片，不能用本機檔案。")
+            else:
+                print("⏭️  Skipped ngrok. You can add NGROK_AUTHTOKEN=your_token to .env later.")
+                print("   Without ngrok, you can only upload images via URL, not local files.")
+
+    print("\n✅ Instagram 設定完成！" if zh else "\n✅ Instagram configured successfully!")
+    return True
 
 
 def _setup_x():
