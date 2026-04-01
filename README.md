@@ -52,9 +52,16 @@ pip install -r requirements.txt
 python3 configure.py
 ```
 
-設定精靈會互動式引導你完成每個平台的設定
+設定精靈會互動式引導你完成每個平台的設定，支援中英文
 
-The setup wizard guides you through each platform interactively.
+The setup wizard guides you through each platform interactively, with bilingual support.
+
+```bash
+python3 configure.py                # 自動偵測語言 / Auto-detect language
+python3 configure.py --lang zh      # 強制中文 / Force Chinese
+python3 configure.py --lang en      # 強制英文 / Force English
+python3 configure.py --lang zh threads  # 中文，只設定 Threads / Chinese, Threads only
+```
 
 ## 使用方式 / Usage
 
@@ -116,15 +123,66 @@ python3 configure.py --status
 
 ## 設定說明 / Setup Details
 
-### Threads 和 Instagram（Meta）
+### Threads
 
-用 Meta Developer Portal 設定，設定精靈會帶你：建立 App → 加 API 產品 → 產生 token → 貼上
+1. **建立 Meta App / Create a Meta App**
+   - 去 https://developers.facebook.com/apps/
+   - 點「建立應用程式」/ Click "Create App"（或用現有的 app / or use existing app）
+   - 使用案例加「存取 Threads API」/ For Use cases add "Access Threads API"
+   - 商家選「我還不想連結商家資產管理組合」/ For Business select "I don't want to connect a business portfolio yet"
+   - 「下一步」→「下一步」→「建立應用程式」/ "Next" → "Next" → "Create App"
 
-Uses the Meta Developer Portal. The wizard walks you through: Create app → Add API product → Generate token → Paste
+2. **開啟發文權限 / Enable content publish permission**
+   - Dashboard 側欄選「使用案例」/ Select "Use cases" on the side panel
+   - 點「存取 Threads API」的 Edit / Click edit on "Access the Threads API"
+   - 加 `threads_content_publish`
 
-不需要 OAuth 流程，直接貼上 token 就好
+3. **加自己為測試人員 / Add yourself as a Threads Tester**
+   - 去「設定」，在「用戶權杖產生器」點「新增或移除Threads測試人員」/ Go to "Settings", in "User Token Generator" click "Add or Remove Threads Testers"
+   - 點「新增用戶」→ 選「Threads 測試人員」→ 輸入帳號 → 點「新增」/ Click "Add People" → Select "Threads Tester" → Enter username → Click "Add"
 
-No OAuth flow needed — you paste the token directly.
+4. **接受邀請 / Accept the tester invite**
+   - 點「網站權限」連結（會跳到 Threads），或在 Threads app →「設定」→「帳戶」→「網站權限」/ Click "Website permissions" link, or in Threads app → "Settings" → "Account" → "Website permissions"
+   - 去「邀請」→ 接受 / Go to "Invitations" → Accept
+
+5. **產生並儲存 token / Generate and save the access token**
+   - 回到開發者後台 →「使用案例」→「存取 Threads API」→「設定」→ 點「產生存取權杖」/ Go back to developer console → "Use cases" → "Access Threads API" → "Settings" → Click "Generate"
+   - 複製權杖 / Copy the access token
+   - 打開 `.env`，加上 / Open `.env` and add：`THREADS_ACCESS_TOKEN=your_token_here`
+
+### Instagram
+
+前置條件：需要 Instagram 商業帳號（非個人帳號）
+
+Prerequisite: You need an Instagram Business or Creator account (not personal).
+
+1. **建立 Meta App / Create a Meta App**
+   - 去 https://developers.facebook.com/apps/
+   - 點「建立應用程式」/ Click "Create App"（或用現有的 app / or use existing app）
+   - 使用案例加「管理Instagram的訊息或內容」/ For Use cases add "Manage messaging & content on Instagram"
+   - 商家選「我還不想連結商家資產管理組合」/ For Business select "I don't want to connect a business portfolio yet"
+   - 「下一步」→「下一步」→「建立應用程式」/ "Next" → "Next" → "Create App"
+
+2. **設定權限 / Configure permissions**
+   - Dashboard 側欄選「使用案例」/ Select "Use cases" on the side panel
+   - 點「管理Instagram的訊息或內容」的 Customize / Click "Customize" on "Manage messaging & content on Instagram"
+   - 加所有需要的權限 / Add all required permissions
+
+3. **加自己為測試人員 / Add yourself as an Instagram Tester**
+   - 點「角色」連結，或左下角去 App Roles → Roles / Click "Roles" link, or go to "App Roles" → "Roles" (bottom left)
+   - 點「新增用戶」→ 選「Instagram 測試人員」→ 輸入帳號 → 點「新增」/ Click "Add People" → Select "Instagram Tester" → Enter username → Click "Add"
+
+4. **接受邀請 / Accept the tester invite**
+   - 點「應用程式和網站」連結，或在 IG →「設定」→「應用程式網站權限」→「應用程式和網站」→「測試員邀請」→「接受」/ Click "Apps and Websites" link, or in Instagram → "Settings" → "App Website permissions" → "Apps and websites" → "Tester Invitations" → "Accept"
+
+5. **產生並儲存 token / Generate and save the access token**
+   - 回到開發者後台 →「使用案例」→「管理Instagram的訊息或內容」→「設定」/ Go back to developer console → "Use cases" → "Manage messaging & content on Instagram" → "Settings"
+   - 點「新增帳號」→ 登入帳號同意權限 / Click "Add account" → Log in and grant permissions
+   - 點「產生權杖」/ Click "Generate access token"
+   - 複製 access token / Copy access token
+   - 打開 `.env`，加上 / Open `.env` and add：`INSTAGRAM_ACCESS_TOKEN=your_token_here`
+
+**注意 / Note:** 本機圖片上傳需要 ngrok / Local image uploads require ngrok（`brew install ngrok && ngrok authtoken YOUR_TOKEN`）
 
 ### LinkedIn、TikTok、YouTube（OAuth）
 

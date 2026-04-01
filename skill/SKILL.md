@@ -1,6 +1,6 @@
 ---
 name: multipost
-description: Post to 6 platforms (Threads, X, Instagram, LinkedIn, TikTok, YouTube) with one command. Guides setup, handles OAuth, posts via API or Playwright fallback. Use when user says "post to threads", "post everywhere", "set up multipost", or "multipost status".
+description: Post to 6 platforms (Threads, X, Instagram, LinkedIn, TikTok, YouTube) with one command. Guides setup, handles OAuth, posts via API or Playwright fallback. Use when user says "post to threads", "post everywhere", "set up multipost", "multipost status", "設定 multipost", "發文到", "發到所有平台".
 ---
 
 # multipost — Multi-Platform Posting Skill
@@ -18,35 +18,22 @@ Post content to Threads, X, Instagram, LinkedIn, TikTok, and YouTube from Claude
 ls configure.py scripts/shared.py 2>/dev/null && echo "OK" || echo "ERROR: Not in multipost directory. Run: cd ~/Projects/multipost"
 ```
 
-## Two Modes
+## Before Posting
 
-### Mode 1: Setup
-
-Triggered by: "set up multipost", "configure platforms", "multipost status"
-
-**Step 1:** Check status:
+Check platform status first:
 ```bash
 python3 configure.py --status
 ```
 
-**Step 2:** For each unconfigured platform, ask the user:
-> "[Platform] isn't configured yet. Want to set it up now?"
+If a platform is **not configured**, tell the user:
+> "Run `python3 configure.py [platform]` in your terminal to set it up. Let me know if you run into any issues."
+> 「在終端機跑 `python3 configure.py [platform]` 來設定。有問題的話跟我說。」
 
-**Step 3:** If yes, run the interactive setup:
-```bash
-python3 scripts/post_[platform].py --setup
-```
+**Do NOT try to guide the user through setup yourself** — the Python script has the exact, up-to-date instructions with bilingual support and handles OAuth flows.
 
-The script will guide the user through creating a developer app and getting tokens. Relay the prompts to the user and pass their responses.
+## Posting
 
-**Step 4:** Show final status:
-```bash
-python3 configure.py --status
-```
-
-### Mode 2: Post
-
-Triggered by: "post [text] to [platform]", "post everywhere", "publish to threads"
+Triggered by: "post [text] to [platform]", "post everywhere", "publish to threads", "發文到 [platform]", "發到所有平台"
 
 **Step 1:** Confirm with user before posting:
 > Ready to post to **[Platform]**?
@@ -84,12 +71,16 @@ python3 scripts/post_instagram.py --images "/path/a.jpg,/path/b.jpg" "Caption te
 
 #### Video platforms (TikTok, YouTube)
 
-Ask for video path first:
-> "Paste the path to your video file:"
+Ask for: video path, and for YouTube also ask if it's a **regular video** or a **Short**.
 
 ```bash
+# TikTok
 python3 scripts/post_tiktok.py --media /path/to/video.mp4 "Caption text"
+
+# YouTube — regular video
 python3 scripts/post_youtube.py --media /path/to/video.mp4 --title "Title" "Description"
+
+# YouTube — Short (vertical video, <60s)
 python3 scripts/post_youtube.py --short --media /path/to/video.mp4 --title "Title" "Description"
 ```
 
@@ -154,12 +145,19 @@ For a user's first post, suggest a dry run:
 python3 scripts/post_threads.py --dry-run "Post text"
 ```
 
+## Prerequisites
+
+- **ngrok**: Required for Instagram local image uploads. Install: `brew install ngrok && ngrok authtoken YOUR_TOKEN`
+  - Get your authtoken at https://dashboard.ngrok.com/get-started/your-authtoken
+
 ## Error Handling
 
 - **401 error**: Token expired. Run `python3 scripts/refresh_tokens.py [platform]` or re-setup: `python3 configure.py [platform]`
 - **403 error**: API permissions issue. Check platform developer portal.
 - **Script not found**: User isn't in the multipost directory. `cd ~/Projects/multipost`
-- **Platform not configured**: Offer to run setup: `python3 scripts/post_[platform].py --setup`
+- **Platform not configured**: Tell user to run `python3 configure.py [platform]` in their terminal
+- **ngrok tunnel failed**: Make sure ngrok is installed and authenticated. Kill stale sessions: `pkill -f ngrok`
+- **Instagram aspect ratio error**: Image must be between 4:5 and 1.91:1 ratio
 
 ## Token Refresh
 

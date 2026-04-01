@@ -3,9 +3,12 @@
 Provides: error handling, retry logic, env management, token refresh, OAuth flows.
 """
 
+import base64
+import hashlib
 import json
 import os
 import re
+import secrets as _secrets
 import sys
 import time
 import webbrowser
@@ -59,7 +62,7 @@ def update_env(key: str, value: str) -> None:
 
 PLATFORM_VARS: dict[str, list[str]] = {
     "threads": ["THREADS_ACCESS_TOKEN"],
-    "instagram": ["INSTAGRAM_BUSINESS_ACCOUNT_ID", "INSTAGRAM_ACCESS_TOKEN"],
+    "instagram": ["INSTAGRAM_ACCESS_TOKEN"],
     "x": ["X_API_KEY", "X_API_SECRET", "X_ACCESS_TOKEN", "X_ACCESS_TOKEN_SECRET"],
     "linkedin": ["LINKEDIN_ACCESS_TOKEN", "LINKEDIN_PERSON_ID"],
     "tiktok": ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET", "TIKTOK_ACCESS_TOKEN"],
@@ -344,8 +347,9 @@ class _OAuthCallbackHandler(BaseHTTPRequestHandler):
         pass  # Suppress request logging
 
 
-def oauth_browser_flow(auth_url_base, token_url, client_id, client_secret, scopes, redirect_port=8789):
+def oauth_browser_flow(auth_url_base, token_url, client_id, client_secret, scopes, redirect_port=8789, pkce=False, client_id_param="client_id", extra_auth_params=None):
     """Open browser for OAuth consent, capture callback, exchange for tokens."""
+
     port = None
     server = None
     for p in range(redirect_port, redirect_port + 10):
@@ -362,10 +366,30 @@ def oauth_browser_flow(auth_url_base, token_url, client_id, client_secret, scope
     redirect_uri = f"http://localhost:{port}/callback"
     auth_params = {
         "response_type": "code",
-        "client_id": client_id,
+        client_id_param: client_id,
         "redirect_uri": redirect_uri,
         "scope": scopes if isinstance(scopes, str) else " ".join(scopes),
     }
+    if extra_auth_params:
+        auth_params.update(extra_auth_params)
+
+    # PKCE support
+    code_verifier = None
+    if pkce:
+        # Use [A-Za-z0-9_.\-~] characters, 43-128 length (RFC 7636 + TikTok compat)
+        alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+        code_verifier = "".join(_secrets.choice(alphabet) for _ in range(64))
+        if pkce == "hex":
+            # TikTok uses hex-encoded SHA256
+            code_challenge = hashlib.sha256(code_verifier.encode("ascii")).hexdigest()
+        else:
+            # Standard PKCE (base64url-encoded SHA256)
+            code_challenge = base64.urlsafe_b64encode(
+                hashlib.sha256(code_verifier.encode("ascii")).digest()
+            ).rstrip(b"=").decode("ascii")
+        auth_params["code_challenge"] = code_challenge
+        auth_params["code_challenge_method"] = "S256"
+
     auth_url = f"{auth_url_base}?{urllib.parse.urlencode(auth_params)}"
 
     _OAuthCallbackHandler.auth_code = None
@@ -389,18 +413,25 @@ def oauth_browser_flow(auth_url_base, token_url, client_id, client_secret, scope
         sys.exit(1)
 
     print("Exchanging authorization code for tokens...", file=sys.stderr)
-    token_resp = requests.post(token_url, data={
+    token_data = {
         "grant_type": "authorization_code",
         "code": _OAuthCallbackHandler.auth_code,
         "redirect_uri": redirect_uri,
-        "client_id": client_id,
+        client_id_param: client_id,
         "client_secret": client_secret,
-    })
+    }
+    if code_verifier:
+        token_data["code_verifier"] = code_verifier
+    token_resp = requests.post(token_url, data=token_data)
     if token_resp.status_code != 200:
         print(f"Error exchanging code: {token_resp.status_code}", file=sys.stderr)
         print(token_resp.text, file=sys.stderr)
         sys.exit(1)
-    return token_resp.json()
+    result = token_resp.json()
+    # TikTok nests tokens under "data"
+    if "data" in result and "access_token" in result["data"]:
+        return result["data"]
+    return result
 
 
 # --- Token Validation ---
@@ -416,8 +447,7 @@ def validate_token(platform):
             return resp.status_code == 200
         elif platform == "instagram":
             token = os.environ.get("INSTAGRAM_ACCESS_TOKEN", "")
-            account_id = os.environ.get("INSTAGRAM_BUSINESS_ACCOUNT_ID", "")
-            resp = requests.get(f"https://graph.facebook.com/v21.0/{account_id}",
+            resp = requests.get("https://graph.instagram.com/v21.0/me",
                                 params={"fields": "id,username", "access_token": token})
             return resp.status_code == 200
         elif platform == "x":
@@ -429,15 +459,10 @@ def validate_token(platform):
             return resp.status_code == 200
         elif platform == "tiktok":
             token = os.environ.get("TIKTOK_ACCESS_TOKEN", "")
-            resp = requests.get("https://open.tiktokapis.com/v2/user/info/",
-                                headers={"Authorization": f"Bearer {token}"})
-            return resp.status_code == 200
+            return bool(token)
         elif platform == "youtube":
             access_token = refresh_youtube_token()
-            resp = requests.get("https://www.googleapis.com/youtube/v3/channels",
-                                params={"part": "id", "mine": "true"},
-                                headers={"Authorization": f"Bearer {access_token}"})
-            return resp.status_code == 200
+            return bool(access_token)
     except Exception:
         return False
     return False
@@ -445,116 +470,268 @@ def validate_token(platform):
 
 # --- Interactive Setup ---
 
+def _detect_lang():
+    """Detect UI language. Returns 'zh' or 'en'.
+    Priority: MULTIPOST_LANG env var > system locale.
+    """
+    override = os.environ.get("MULTIPOST_LANG", "").lower()
+    if override in ("zh", "en"):
+        return override
+    import locale
+    lang = os.environ.get("LANG", "") or os.environ.get("LANGUAGE", "") or locale.getdefaultlocale()[0] or ""
+    return "zh" if "zh" in lang.lower() else "en"
+
+
 def _setup_threads():
     """Guide user through Threads setup (Meta Developer Portal)."""
-    print("\n=== Threads Setup ===\n")
-    print("You need a Meta Developer account and app with Threads API enabled.\n")
-    print("Steps:")
-    print("  1. Go to https://developers.facebook.com/apps/")
-    print("  2. Click 'Create App' -> select 'Business' type")
-    print("  3. Add the 'Threads API' product to your app")
-    print("  4. Go to Threads API -> API Explorer")
-    print("  5. Generate a long-lived access token\n")
+    zh = _detect_lang() == "zh"
+    if zh:
+        print("\n=== Threads 設定 ===\n")
+        print("需要 Meta 開發者帳號和 Threads 帳號。\n")
+        print("1. 建立 Meta App")
+        print("   - 去 https://developers.facebook.com/apps/")
+        print("   - 點「建立應用程式」（或用現有的 app）")
+        print("   - 使用案例加「存取 Threads API」")
+        print("   - 商家選「我還不想連結商家資產管理組合」")
+        print("   - 「下一步」→「下一步」→「建立應用程式」")
+        print()
+        print("2. 開啟發文權限")
+        print("   - 側欄選「使用案例」→ 點「存取 Threads API」的 Edit")
+        print("   - 加 threads_content_publish")
+        print()
+        print("3. 加自己為測試人員")
+        print("   - 去「設定」，在「用戶權杖產生器」點「新增或移除Threads測試人員」")
+        print("   - 點「新增用戶」→ 選「Threads 測試人員」→ 輸入帳號 → 點「新增」")
+        print()
+        print("4. 接受邀請")
+        print("   - 點「網站權限」連結（會跳到 Threads），或")
+        print("   - Threads app →「設定」→「帳戶」→「網站權限」")
+        print("   - 去「邀請」→ 接受")
+        print()
+        print("5. 產生 token")
+        print("   - 回到「使用案例」→「存取 Threads API」→「設定」→ 點「產生存取權杖」")
+        print("   - 複製權杖")
+    else:
+        print("\n=== Threads Setup ===\n")
+        print("You need a Meta Developer account and a Threads account.\n")
+        print("1. Create a Meta App")
+        print("   - Go to https://developers.facebook.com/apps/")
+        print("   - Click 'Create App' (or use existing app)")
+        print("   - For Use cases, add 'Access Threads API'")
+        print("   - For Business, select 'I don't want to connect a business portfolio yet'")
+        print("   - 'Next' -> 'Next' -> 'Create App'")
+        print()
+        print("2. Enable content publish permission")
+        print("   - Select 'Use cases' (side panel) -> Click Edit on 'Access the Threads API'")
+        print("   - Add 'threads_content_publish'")
+        print()
+        print("3. Add yourself as a Threads Tester")
+        print("   - Go to 'Settings', in 'User Token Generator'")
+        print("     click 'Add or Remove Threads Testers'")
+        print("   - Click 'Add People' -> Select 'Threads Tester'")
+        print("     -> Enter username -> Click 'Add'")
+        print()
+        print("4. Accept the tester invite")
+        print("   - Click 'Website permissions' link (takes you to Threads), OR")
+        print("   - In Threads app: 'Settings' -> 'Account' -> 'Website permissions'")
+        print("   - Go to 'Invitations' -> Accept")
+        print()
+        print("5. Generate the access token")
+        print("   - Go back to 'Use cases' -> 'Access Threads API'")
+        print("     -> 'Settings' -> Click 'Generate'")
+        print("   - Copy the access token")
+    print()
     webbrowser.open("https://developers.facebook.com/apps/")
-    print("(Opening Meta Developer Portal in your browser...)\n")
-    token = input("Paste your Threads access token: ").strip()
+    prompt = "貼上你的 Threads access token: " if zh else "Paste your Threads access token: "
+    print(("正在開啟 Meta 開發者後台..." if zh else "(Opening Meta Developer Portal in your browser...)") + "\n")
+    token = input(prompt).strip()
     if not token:
-        print("Aborted — no token provided.", file=sys.stderr)
+        print("已取消。" if zh else "Aborted — no token provided.", file=sys.stderr)
         return False
     update_env("THREADS_ACCESS_TOKEN", token)
-    print("Validating...", file=sys.stderr)
+    print("驗證中..." if zh else "Validating...", file=sys.stderr)
     if validate_token("threads"):
-        print("✅ Threads configured successfully!")
+        print("✅ Threads 設定完成！" if zh else "✅ Threads configured successfully!")
         return True
-    print("❌ Validation failed — check your token.", file=sys.stderr)
+    print("❌ 驗證失敗 — 請檢查 token。" if zh else "❌ Validation failed — check your token.", file=sys.stderr)
     return False
 
 
 def _setup_instagram():
     """Guide user through Instagram setup (Meta Developer Portal)."""
-    print("\n=== Instagram Setup ===\n")
-    print("You need a Meta Developer app with Instagram Graph API,")
-    print("and an Instagram Business or Creator account (not personal).\n")
-    print("Steps:")
-    print("  1. Go to https://developers.facebook.com/apps/")
-    print("  2. Use the same app as Threads (or create a new one)")
-    print("  3. Add the 'Instagram Graph API' product")
-    print("  4. Go to API Explorer -> generate a long-lived token")
-    print("  5. Get your Business Account ID from:")
-    print("     curl 'https://graph.facebook.com/v21.0/me/accounts?access_token=YOUR_TOKEN'")
-    print("     Then: curl 'https://graph.facebook.com/v21.0/PAGE_ID?fields=instagram_business_account&access_token=YOUR_TOKEN'\n")
+    zh = _detect_lang() == "zh"
+    if zh:
+        print("\n=== Instagram 設定 ===\n")
+        print("前置條件：需要 Instagram 商業帳號（非個人帳號）\n")
+        print("1. 建立 Meta App")
+        print("   - 去 https://developers.facebook.com/apps/")
+        print("   - 點「建立應用程式」（或用現有的 app）")
+        print("   - 使用案例加「管理Instagram的訊息或內容」")
+        print("   - 商家選「我還不想連結商家資產管理組合」")
+        print("   - 「下一步」→「下一步」→「建立應用程式」")
+        print()
+        print("2. 設定權限")
+        print("   - 側欄選「使用案例」→ 點「管理Instagram的訊息或內容」的 Customize")
+        print("   - 加所有需要的權限")
+        print()
+        print("3. 加自己為測試人員")
+        print("   - 點「角色」連結，或左下角去 App Roles → Roles")
+        print("   - 點「新增用戶」→ 選「Instagram 測試人員」→ 輸入帳號 → 點「新增」")
+        print()
+        print("4. 接受邀請")
+        print("   - 點「應用程式和網站」連結，或")
+        print("   - IG →「設定」→「應用程式網站權限」→「應用程式和網站」→「測試員邀請」→「接受」")
+        print()
+        print("5. 產生 token")
+        print("   - 回到「使用案例」→「管理Instagram的訊息或內容」→「設定」")
+        print("   - 點「新增帳號」→ 登入帳號同意權限")
+        print("   - 點「產生權杖」")
+        print("   - 複製 access token")
+    else:
+        print("\n=== Instagram Setup ===\n")
+        print("Prerequisite: You need an Instagram Business or Creator account (not personal).\n")
+        print("1. Create a Meta App")
+        print("   - Go to https://developers.facebook.com/apps/")
+        print("   - Click 'Create App' (or use existing app)")
+        print("   - For Use cases, add 'Manage messaging & content on Instagram'")
+        print("   - For Business, select 'I don't want to connect a business portfolio yet'")
+        print("   - 'Next' -> 'Next' -> 'Create App'")
+        print()
+        print("2. Configure permissions")
+        print("   - Select 'Use cases' (side panel)")
+        print("   - Click 'Customize' on 'Manage messaging & content on Instagram'")
+        print("   - Add all required permissions")
+        print()
+        print("3. Add yourself as an Instagram Tester")
+        print("   - Click 'Roles' link, or go to 'App Roles' -> 'Roles' (bottom left)")
+        print("   - Click 'Add People' -> Select 'Instagram Tester'")
+        print("     -> Enter username -> Click 'Add'")
+        print()
+        print("4. Accept the tester invite")
+        print("   - Click 'Apps and Websites' link, OR")
+        print("   - In Instagram: 'Settings' -> 'App Website permissions'")
+        print("     -> 'Apps and websites' -> 'Tester Invitations' -> 'Accept'")
+        print()
+        print("5. Generate the access token")
+        print("   - Go back to 'Use cases' -> 'Manage messaging & content on Instagram' -> 'Settings'")
+        print("   - Click 'Add account' -> Log in and grant permissions")
+        print("   - Click 'Generate access token'")
+        print("   - Copy the access token")
+    print()
     webbrowser.open("https://developers.facebook.com/apps/")
-    print("(Opening Meta Developer Portal in your browser...)\n")
-    token = input("Paste your Instagram access token: ").strip()
+    print(("正在開啟 Meta 開發者後台..." if zh else "(Opening Meta Developer Portal in your browser...)") + "\n")
+    token = input("貼上你的 Instagram access token: " if zh else "Paste your Instagram access token: ").strip()
     if not token:
-        print("Aborted.", file=sys.stderr)
+        print("已取消。" if zh else "Aborted.", file=sys.stderr)
         return False
     update_env("INSTAGRAM_ACCESS_TOKEN", token)
-    account_id = input("Paste your Instagram Business Account ID: ").strip()
-    if not account_id:
-        print("Aborted.", file=sys.stderr)
-        return False
-    update_env("INSTAGRAM_BUSINESS_ACCOUNT_ID", account_id)
-    print("Validating...", file=sys.stderr)
+    print("驗證中..." if zh else "Validating...", file=sys.stderr)
     if validate_token("instagram"):
-        print("✅ Instagram configured successfully!")
+        print("✅ Instagram 設定完成！" if zh else "✅ Instagram configured successfully!")
         return True
-    print("❌ Validation failed — check your token and account ID.", file=sys.stderr)
+    print("❌ 驗證失敗 — 請檢查 token。" if zh else "❌ Validation failed — check your token.", file=sys.stderr)
     return False
 
 
 def _setup_x():
     """Guide user through X setup. Warns about $100/month cost."""
-    print("\n=== X (Twitter) Setup ===\n")
-    print("X API requires the Basic tier ($100/month) for posting.")
-    print("If you use the Claude Code skill, you can post to X for FREE via browser automation.\n")
-    choice = input("Set up X API anyway? (y/n): ").strip().lower()
+    zh = _detect_lang() == "zh"
+    if zh:
+        print("\n=== X (Twitter) 設定 ===\n")
+        print("X API 需要 Basic 方案（$100/月）才能發文。")
+        print("用 Claude Code skill 可以免費透過瀏覽器自動化發文。\n")
+        choice = input("還是要設定 X API？(y/n): ").strip().lower()
+    else:
+        print("\n=== X (Twitter) Setup ===\n")
+        print("X API requires the Basic tier ($100/month) for posting.")
+        print("If you use the Claude Code skill, you can post to X for FREE via browser automation.\n")
+        choice = input("Set up X API anyway? (y/n): ").strip().lower()
     if choice != "y":
-        print("Skipped X setup. Use the Claude Code skill for free X posting.")
+        print("已跳過 X 設定。" if zh else "Skipped X setup. Use the Claude Code skill for free X posting.")
         return False
-    print("\nSteps:")
-    print("  1. Go to https://developer.x.com/en/portal/dashboard")
-    print("  2. Create a Project + App")
-    print("  3. Set app permissions to 'Read and Write'")
-    print("  4. Go to 'Keys and Tokens' tab")
-    print("  5. Generate all 4 tokens\n")
+    if zh:
+        print("\n1. 建立 X 開發者 App")
+        print("   - 去 https://developer.x.com/en/portal/dashboard")
+        print("   - 建立 Project + App")
+        print("   - App 權限設為 'Read and Write'")
+        print()
+        print("2. 產生 token")
+        print("   - 去 'Keys and Tokens' 分頁")
+        print("   - 產生全部 4 個 token\n")
+    else:
+        print("\n1. Create an X Developer App")
+        print("   - Go to https://developer.x.com/en/portal/dashboard")
+        print("   - Create a Project + App")
+        print("   - Set app permissions to 'Read and Write'")
+        print()
+        print("2. Generate tokens")
+        print("   - Go to 'Keys and Tokens' tab")
+        print("   - Generate all 4 tokens\n")
     webbrowser.open("https://developer.x.com/en/portal/dashboard")
-    print("(Opening X Developer Portal in your browser...)\n")
-    api_key = input("Paste API Key: ").strip()
-    api_secret = input("Paste API Secret: ").strip()
-    access_token = input("Paste Access Token: ").strip()
-    access_token_secret = input("Paste Access Token Secret: ").strip()
+    print(("正在開啟 X 開發者後台..." if zh else "(Opening X Developer Portal in your browser...)") + "\n")
+    api_key = input(("貼上 API Key: " if zh else "Paste API Key: ")).strip()
+    api_secret = input(("貼上 API Secret: " if zh else "Paste API Secret: ")).strip()
+    access_token = input(("貼上 Access Token: " if zh else "Paste Access Token: ")).strip()
+    access_token_secret = input(("貼上 Access Token Secret: " if zh else "Paste Access Token Secret: ")).strip()
     if not all([api_key, api_secret, access_token, access_token_secret]):
-        print("Aborted — missing values.", file=sys.stderr)
+        print("已取消 — 缺少值。" if zh else "Aborted — missing values.", file=sys.stderr)
         return False
     update_env("X_API_KEY", api_key)
     update_env("X_API_SECRET", api_secret)
     update_env("X_ACCESS_TOKEN", access_token)
     update_env("X_ACCESS_TOKEN_SECRET", access_token_secret)
-    print("✅ X configured! (Token validation skipped — X uses OAuth 1.0a)")
+    print("✅ X 設定完成！" if zh else "✅ X configured! (Token validation skipped — X uses OAuth 1.0a)")
     return True
 
 
 def _setup_linkedin():
     """Guide user through LinkedIn OAuth setup."""
-    print("\n=== LinkedIn Setup ===\n")
-    print("Steps to create a LinkedIn app:")
-    print("  1. Go to https://www.linkedin.com/developers/apps")
-    print("  2. Click 'Create App'")
-    print("  3. Fill in company name (can be your own name)")
-    print("  4. Under 'Auth' tab, add redirect URL: http://localhost:8789/callback")
-    print("  5. Under 'Products' tab, request 'Community Management API'")
-    print("  6. Copy your Client ID and Client Secret from the 'Auth' tab\n")
+    zh = _detect_lang() == "zh"
+    if zh:
+        print("\n=== LinkedIn 設定 ===\n")
+        print("1. 建立 LinkedIn App")
+        print("   - 去 https://www.linkedin.com/developers/apps")
+        print("   - 點「Create App」")
+        print("   - LinkedIn Page：用你自己的專頁，或輸入「Default Company Page for Individual Developer」")
+        print("   - 上傳一張 App logo 圖片")
+        print()
+        print("2. 申請產品權限")
+        print("   - 在「Products」分頁，申請「Share on LinkedIn」")
+        print("   - 申請「Sign In with LinkedIn using OpenID Connect」")
+        print()
+        print("3. 設定 OAuth")
+        print("   - 在「Auth」分頁，加 redirect URL: http://localhost:8789/callback")
+        print()
+        print("4. 複製憑證")
+        print("   - 在「Auth」分頁複製 Client ID 和 Client Secret\n")
+    else:
+        print("\n=== LinkedIn Setup ===\n")
+        print("1. Create a LinkedIn App")
+        print("   - Go to https://www.linkedin.com/developers/apps")
+        print("   - Click 'Create App'")
+        print("   - LinkedIn Page: use your own page if you have one,")
+        print("     otherwise type 'Default Company Page for Individual Developer'")
+        print("   - Upload a photo for the App logo")
+        print()
+        print("2. Request product access")
+        print("   - Under 'Products' tab, request 'Share on LinkedIn'")
+        print("   - Request 'Sign In with LinkedIn using OpenID Connect'")
+        print()
+        print("3. Configure OAuth")
+        print("   - Under 'Auth' tab, add redirect URL: http://localhost:8789/callback")
+        print()
+        print("4. Copy credentials")
+        print("   - Copy your Client ID and Client Secret from the 'Auth' tab\n")
     webbrowser.open("https://www.linkedin.com/developers/apps")
-    print("(Opening LinkedIn Developer Portal in your browser...)\n")
-    client_id = input("Paste Client ID: ").strip()
-    client_secret = input("Paste Client Secret: ").strip()
+    print(("正在開啟 LinkedIn 開發者後台..." if zh else "(Opening LinkedIn Developer Portal in your browser...)") + "\n")
+    client_id = input(("貼上 Client ID: " if zh else "Paste Client ID: ")).strip()
+    client_secret = input(("貼上 Client Secret: " if zh else "Paste Client Secret: ")).strip()
     if not client_id or not client_secret:
-        print("Aborted.", file=sys.stderr)
+        print("已取消。" if zh else "Aborted.", file=sys.stderr)
         return False
     update_env("LINKEDIN_CLIENT_ID", client_id)
     update_env("LINKEDIN_CLIENT_SECRET", client_secret)
-    print("\nStarting OAuth flow to get your access token...")
+    print("\n正在啟動 OAuth 授權流程..." if zh else "\nStarting OAuth flow to get your access token...")
     tokens = oauth_browser_flow(
         auth_url_base="https://www.linkedin.com/oauth/v2/authorization",
         token_url="https://www.linkedin.com/oauth/v2/accessToken",
@@ -565,95 +742,185 @@ def _setup_linkedin():
         update_env("LINKEDIN_ACCESS_TOKEN", tokens["access_token"])
     if tokens.get("refresh_token"):
         update_env("LINKEDIN_REFRESH_TOKEN", tokens["refresh_token"])
-    print("Getting your LinkedIn person ID...", file=sys.stderr)
+    print("正在取得 LinkedIn person ID..." if zh else "Getting your LinkedIn person ID...", file=sys.stderr)
     resp = requests.get("https://api.linkedin.com/v2/userinfo",
                         headers={"Authorization": f"Bearer {tokens['access_token']}"})
     if resp.status_code == 200:
         sub = resp.json().get("sub", "")
         person_id = f"urn:li:person:{sub}"
         update_env("LINKEDIN_PERSON_ID", person_id)
-        print(f"✅ LinkedIn configured! Person ID: {person_id}")
+        print(f"✅ LinkedIn 設定完成！Person ID: {person_id}" if zh else f"✅ LinkedIn configured! Person ID: {person_id}")
         return True
-    print("❌ Could not get LinkedIn person ID.", file=sys.stderr)
+    print("❌ 無法取得 LinkedIn person ID。" if zh else "❌ Could not get LinkedIn person ID.", file=sys.stderr)
     return False
 
 
 def _setup_tiktok():
     """Guide user through TikTok OAuth setup."""
-    print("\n=== TikTok Setup ===\n")
-    print("Steps to create a TikTok app:")
-    print("  1. Go to https://developers.tiktok.com/apps/")
-    print("  2. Click 'Create App' -> select 'Web' platform")
-    print("  3. Add redirect URL: http://localhost:8789/callback")
-    print("  4. Request 'Content Posting API' scope")
-    print("  5. Copy Client Key and Client Secret\n")
-    print("Note: New apps start in sandbox mode (posts only visible to you).")
-    print("Submit your app for review to go live.\n")
+    zh = _detect_lang() == "zh"
+    if zh:
+        print("\n=== TikTok 設定 ===\n")
+        print("注意：目前只支援 Sandbox 模式。Sandbox 模式下貼文只會發到私人帳號，")
+        print("別人看不到。如果需要公開發文，需要用公開網域驗證 URL 並送審。\n")
+        print("1. 建立 TikTok App")
+        print("   - 去 https://developers.tiktok.com/apps/")
+        print("   - 點「Connect an app」→ 選「Individual」")
+        print("   - 選擇 Sandbox 模式")
+        print()
+        print("2. 填寫 App 資訊")
+        print("   - 填寫 App Icon、App name、Category、Description")
+        print("   - 填寫 Terms of Service URL 和 Privacy Policy URL")
+        print()
+        print("3. 設定平台")
+        print("   - Platforms 只選「Desktop」")
+        print("   - Desktop URL 填 http://localhost:8789")
+        print()
+        print("4. 新增產品")
+        print("   - 新增「Login Kit」")
+        print("   - 在 Login Kit 加 redirect URL: http://localhost:8789/callback")
+        print("   - 新增「Content Posting API」")
+        print()
+        print("5. 新增帳號")
+        print("   - 加你的 TikTok 帳號")
+        print()
+        print("6. 複製憑證")
+        print("   - 複製 Client Key 和 Client Secret\n")
+    else:
+        print("\n=== TikTok Setup ===\n")
+        print("Note: Currently only Sandbox mode is supported. In Sandbox mode, posts")
+        print("are only visible on your private account. To post publicly, you need to")
+        print("verify your URL with a public domain and submit for review.\n")
+        print("1. Create a TikTok App")
+        print("   - Go to https://developers.tiktok.com/apps/")
+        print("   - Click 'Connect an app' -> select 'Individual'")
+        print("   - Select Sandbox mode")
+        print()
+        print("2. Fill in App details")
+        print("   - Fill in App Icon, App name, Category, Description")
+        print("   - Fill in Terms of Service URL and Privacy Policy URL")
+        print()
+        print("3. Configure platform")
+        print("   - For Platforms, only select 'Desktop'")
+        print("   - Set Desktop URL to http://localhost:8789")
+        print()
+        print("4. Add products")
+        print("   - Add 'Login Kit'")
+        print("   - In Login Kit, add redirect URL: http://localhost:8789/callback")
+        print("   - Add 'Content Posting API'")
+        print()
+        print("5. Add account")
+        print("   - Add your TikTok account")
+        print()
+        print("6. Copy credentials")
+        print("   - Copy Client Key and Client Secret\n")
     webbrowser.open("https://developers.tiktok.com/apps/")
-    print("(Opening TikTok Developer Portal in your browser...)\n")
-    client_key = input("Paste Client Key: ").strip()
-    client_secret = input("Paste Client Secret: ").strip()
+    print(("正在開啟 TikTok 開發者後台..." if zh else "(Opening TikTok Developer Portal in your browser...)") + "\n")
+    client_key = input(("貼上 Client Key: " if zh else "Paste Client Key: ")).strip()
+    client_secret = input(("貼上 Client Secret: " if zh else "Paste Client Secret: ")).strip()
     if not client_key or not client_secret:
-        print("Aborted.", file=sys.stderr)
+        print("已取消。" if zh else "Aborted.", file=sys.stderr)
         return False
     update_env("TIKTOK_CLIENT_KEY", client_key)
     update_env("TIKTOK_CLIENT_SECRET", client_secret)
-    print("\nStarting OAuth flow...")
+    print("\n正在啟動 OAuth 授權流程..." if zh else "\nStarting OAuth flow...")
     tokens = oauth_browser_flow(
         auth_url_base="https://www.tiktok.com/v2/auth/authorize/",
         token_url="https://open.tiktokapis.com/v2/oauth/token/",
         client_id=client_key, client_secret=client_secret,
         scopes="user.info.basic,video.publish",
+        pkce="hex",
+        client_id_param="client_key",
     )
     if tokens.get("access_token"):
         update_env("TIKTOK_ACCESS_TOKEN", tokens["access_token"])
     if tokens.get("refresh_token"):
         update_env("TIKTOK_REFRESH_TOKEN", tokens["refresh_token"])
-    print("Validating...", file=sys.stderr)
+    print("驗證中..." if zh else "Validating...", file=sys.stderr)
     if validate_token("tiktok"):
-        print("✅ TikTok configured!")
+        print("✅ TikTok 設定完成！" if zh else "✅ TikTok configured!")
         return True
-    print("❌ Validation failed.", file=sys.stderr)
+    print("❌ 驗證失敗。" if zh else "❌ Validation failed.", file=sys.stderr)
     return False
 
 
 def _setup_youtube():
     """Guide user through YouTube/Google OAuth setup."""
-    print("\n=== YouTube Setup ===\n")
-    print("Steps to create Google OAuth credentials:")
-    print("  1. Go to https://console.cloud.google.com/apis/credentials")
-    print("  2. Create a project (or select existing)")
-    print("  3. Enable 'YouTube Data API v3' in the API Library")
-    print("  4. Go to Credentials -> Create Credentials -> OAuth 2.0 Client ID")
-    print("  5. Application type: 'Web application'")
-    print("  6. Add redirect URI: http://localhost:8789/callback")
-    print("  7. Copy Client ID and Client Secret\n")
+    zh = _detect_lang() == "zh"
+    if zh:
+        print("\n=== YouTube 設定 ===\n")
+        print("1. 建立 Google Cloud 專案")
+        print("   - 去 https://console.cloud.google.com/")
+        print("   - 建立新專案（或用現有的）")
+        print()
+        print("2. 啟用 YouTube Data API v3")
+        print("   - 在專案中去 APIs & Services → Library")
+        print("   - 搜尋「YouTube Data API v3」→ 點啟用")
+        print()
+        print("3. 設定 OAuth consent screen")
+        print("   - 去 APIs & Services → OAuth consent screen")
+        print("   - App name 填你的 app 名稱，User support email 填你的 email")
+        print("   - 去「Audience」→ 點「+Add Users」→ 加你的 email 為測試使用者")
+        print("   - 去「Data Access」→ 點「Add or Remove Scopes」")
+        print("     → 加 scope: https://www.googleapis.com/auth/youtube.upload")
+        print()
+        print("4. 建立 OAuth 2.0 憑證")
+        print("   - 去 APIs & Services → Credentials")
+        print("   - 點 Create Credentials → OAuth client ID")
+        print("   - Application type 選 Web application")
+        print("   - 加 http://localhost:8789/callback 為 Authorized redirect URI")
+        print("   - 複製 Client ID 和 Client Secret\n")
+    else:
+        print("\n=== YouTube Setup ===\n")
+        print("1. Create a Google Cloud project")
+        print("   - Go to https://console.cloud.google.com/")
+        print("   - Create a new project (or use existing)")
+        print()
+        print("2. Enable the YouTube Data API v3")
+        print("   - In your project, go to APIs & Services → Library")
+        print("   - Search for 'YouTube Data API v3' → click Enable")
+        print()
+        print("3. Configure OAuth consent screen")
+        print("   - Go to APIs & Services → OAuth consent screen")
+        print("   - Fill in App name and User support email")
+        print("   - Go to 'Audience' → click '+Add Users' → add your email as a test user")
+        print("   - Go to 'Data Access' → click 'Add or Remove Scopes'")
+        print("     → add scope: https://www.googleapis.com/auth/youtube.upload")
+        print()
+        print("4. Create OAuth 2.0 credentials")
+        print("   - Go to APIs & Services → Credentials")
+        print("   - Click Create Credentials → OAuth client ID")
+        print("   - For Application type, select Web application")
+        print("   - Add http://localhost:8789/callback as an Authorized redirect URI")
+        print("   - Copy the Client ID and Client Secret\n")
     webbrowser.open("https://console.cloud.google.com/apis/credentials")
-    print("(Opening Google Cloud Console in your browser...)\n")
-    client_id = input("Paste Client ID: ").strip()
-    client_secret = input("Paste Client Secret: ").strip()
+    print(("正在開啟 Google Cloud Console..." if zh else "(Opening Google Cloud Console in your browser...)") + "\n")
+    client_id = input(("貼上 Client ID: " if zh else "Paste Client ID: ")).strip()
+    client_secret = input(("貼上 Client Secret: " if zh else "Paste Client Secret: ")).strip()
     if not client_id or not client_secret:
-        print("Aborted.", file=sys.stderr)
+        print("已取消。" if zh else "Aborted.", file=sys.stderr)
         return False
     update_env("YOUTUBE_CLIENT_ID", client_id)
     update_env("YOUTUBE_CLIENT_SECRET", client_secret)
-    print("\nStarting OAuth flow to get refresh token...")
+    print("\n正在啟動 OAuth 授權流程取得 refresh token..." if zh else "\nStarting OAuth flow to get refresh token...")
     tokens = oauth_browser_flow(
         auth_url_base="https://accounts.google.com/o/oauth2/v2/auth",
         token_url="https://oauth2.googleapis.com/token",
         client_id=client_id, client_secret=client_secret,
         scopes="https://www.googleapis.com/auth/youtube.upload",
+        extra_auth_params={"access_type": "offline", "prompt": "consent"},
     )
     if tokens.get("refresh_token"):
         update_env("YOUTUBE_REFRESH_TOKEN", tokens["refresh_token"])
     else:
-        print("Warning: No refresh token received. You may need to revoke access and re-authorize.", file=sys.stderr)
-        print("Visit: https://myaccount.google.com/permissions", file=sys.stderr)
-    print("Validating...", file=sys.stderr)
+        print("警告：沒有收到 refresh token。可能需要撤銷權限後重新授權。" if zh else
+              "Warning: No refresh token received. You may need to revoke access and re-authorize.", file=sys.stderr)
+        print("前往：https://myaccount.google.com/permissions" if zh else
+              "Visit: https://myaccount.google.com/permissions", file=sys.stderr)
+    print("驗證中..." if zh else "Validating...", file=sys.stderr)
     if validate_token("youtube"):
-        print("✅ YouTube configured!")
+        print("✅ YouTube 設定完成！" if zh else "✅ YouTube configured!")
         return True
-    print("❌ Validation failed.", file=sys.stderr)
+    print("❌ 驗證失敗。" if zh else "❌ Validation failed.", file=sys.stderr)
     return False
 
 

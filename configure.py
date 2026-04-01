@@ -5,8 +5,11 @@ Usage:
   python3 configure.py              # Setup all platforms
   python3 configure.py threads      # Setup one platform
   python3 configure.py --status     # Show what's configured
+  python3 configure.py --lang zh    # Force Chinese
+  python3 configure.py --lang en    # Force English
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -55,9 +58,18 @@ def setup_all():
 
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    argv = sys.argv[1:]
 
-    if "--status" in sys.argv:
+    # Parse --lang flag
+    if "--lang" in argv:
+        idx = argv.index("--lang")
+        if idx + 1 < len(argv):
+            os.environ["MULTIPOST_LANG"] = argv[idx + 1]
+            argv = argv[:idx] + argv[idx + 2:]
+
+    args = [a for a in argv if not a.startswith("--")]
+
+    if "--status" in argv:
         show_status()
         return
 

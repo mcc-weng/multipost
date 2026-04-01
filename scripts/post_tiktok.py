@@ -57,7 +57,7 @@ def post_to_tiktok(text, video_path, dry_run=False):
     init_payload = {
         "post_info": {
             "title": text,
-            "privacy_level": "PUBLIC_TO_EVERYONE",
+            "privacy_level": "SELF_ONLY",
             "disable_duet": False,
             "disable_comment": False,
             "disable_stitch": False,
