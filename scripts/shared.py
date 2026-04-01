@@ -395,23 +395,23 @@ def oauth_browser_flow(auth_url_base, token_url, client_id, client_secret, scope
     _OAuthCallbackHandler.auth_code = None
     _OAuthCallbackHandler.error = None
 
-    print(f"\nOpening browser for authorization...", file=sys.stderr)
-    print(f"If the browser doesn't open, visit: {auth_url}\n", file=sys.stderr)
+    zh = _detect_lang() == "zh"
+    print("\n正在開啟瀏覽器進行授權..." if zh else "\nOpening browser for authorization...", file=sys.stderr)
+    print(f"如果瀏覽器沒有開啟，請前往：{auth_url}\n" if zh else f"If the browser doesn't open, visit: {auth_url}\n", file=sys.stderr)
     webbrowser.open(auth_url)
 
     server.timeout = 120
-    print("Waiting for authorization (timeout: 120s)...", file=sys.stderr)
-    print("Press Ctrl+C to cancel.\n", file=sys.stderr)
+    print("等待授權中（逾時：120 秒）..." if zh else "Waiting for authorization (timeout: 120s)...", file=sys.stderr)
+    print("按 Ctrl+C 取消。\n" if zh else "Press Ctrl+C to cancel.\n", file=sys.stderr)
     try:
         while _OAuthCallbackHandler.auth_code is None and _OAuthCallbackHandler.error is None:
             server.handle_request()
             if _OAuthCallbackHandler.auth_code is None and _OAuthCallbackHandler.error is None:
-                # Timed out waiting for callback
-                print("Timed out waiting for authorization.", file=sys.stderr)
+                print("授權等待逾時。" if zh else "Timed out waiting for authorization.", file=sys.stderr)
                 server.server_close()
                 return {}
     except KeyboardInterrupt:
-        print("\nCancelled.", file=sys.stderr)
+        print("\n已取消。" if zh else "\nCancelled.", file=sys.stderr)
         server.server_close()
         return {}
     server.server_close()
