@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from scripts.shared import load_env, check_setup, check_all, ensure_setup, validate_token, PLATFORM_VARS, _SETUP_FUNCTIONS
+from scripts.shared import load_env, check_setup, check_all, ensure_setup, validate_token, PLATFORM_VARS, _SETUP_FUNCTIONS, _detect_lang
 
 ALL_PLATFORMS = ["threads", "instagram", "x", "linkedin", "tiktok", "youtube"]
 
@@ -43,7 +43,8 @@ def setup_platform(platform):
     """Run setup for a platform, even if already configured."""
     setup_fn = _SETUP_FUNCTIONS.get(platform)
     if not setup_fn:
-        print(f"Error: Unknown platform '{platform}'", file=sys.stderr)
+        zh = _detect_lang() == "zh"
+        print(f"錯誤：不明平台「{platform}」" if zh else f"Error: Unknown platform '{platform}'", file=sys.stderr)
         return False
     return setup_fn()
 
@@ -51,22 +52,25 @@ def setup_platform(platform):
 def setup_all():
     """Walk through setup for each platform."""
     load_env()
-    print("\nmultipost — setup wizard\n")
+    zh = _detect_lang() == "zh"
+    print("\nmultipost — 設定精靈\n" if zh else "\nmultipost — setup wizard\n")
     for platform in ALL_PLATFORMS:
         configured = check_setup(platform)
         if configured:
-            choice = input(f"\n{platform} is already configured. Reconfigure? (y/n): ").strip().lower()
+            prompt = f"\n{platform} 已設定。要重新設定嗎？(y/n): " if zh else f"\n{platform} is already configured. Reconfigure? (y/n): "
+            choice = input(prompt).strip().lower()
             if choice != "y":
-                print(f"  ⏭️  Skipped {platform}")
+                print(f"  ⏭️  已跳過 {platform}" if zh else f"  ⏭️  Skipped {platform}")
                 continue
         else:
-            choice = input(f"\nSet up {platform}? (y/n): ").strip().lower()
+            prompt = f"\n要設定 {platform} 嗎？(y/n): " if zh else f"\nSet up {platform}? (y/n): "
+            choice = input(prompt).strip().lower()
             if choice != "y":
-                print(f"  ⏭️  Skipped {platform}")
+                print(f"  ⏭️  已跳過 {platform}" if zh else f"  ⏭️  Skipped {platform}")
                 continue
         setup_platform(platform)
 
-    print("\n--- Final Status ---")
+    print("\n--- 最終狀態 ---" if zh else "\n--- Final Status ---")
     show_status()
 
 
@@ -89,8 +93,9 @@ def main():
     if args:
         platform = args[0].lower()
         if platform not in ALL_PLATFORMS:
-            print(f"Unknown platform: {platform}", file=sys.stderr)
-            print(f"Available: {', '.join(ALL_PLATFORMS)}", file=sys.stderr)
+            zh = _detect_lang() == "zh"
+            print(f"不明平台：{platform}" if zh else f"Unknown platform: {platform}", file=sys.stderr)
+            print(f"可用平台：{', '.join(ALL_PLATFORMS)}" if zh else f"Available: {', '.join(ALL_PLATFORMS)}", file=sys.stderr)
             sys.exit(1)
         load_env()
         setup_platform(platform)

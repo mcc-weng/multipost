@@ -360,7 +360,8 @@ def oauth_browser_flow(auth_url_base, token_url, client_id, client_secret, scope
         except OSError:
             continue
     if not server:
-        print("Error: Could not find an available port (tried 8789-8799).", file=sys.stderr)
+        zh = _detect_lang() == "zh"
+        print("錯誤：找不到可用的 port（已嘗試 8789-8799）。" if zh else "Error: Could not find an available port (tried 8789-8799).", file=sys.stderr)
         sys.exit(1)
 
     redirect_uri = f"http://localhost:{port}/callback"
@@ -417,13 +418,13 @@ def oauth_browser_flow(auth_url_base, token_url, client_id, client_secret, scope
     server.server_close()
 
     if _OAuthCallbackHandler.error:
-        print(f"OAuth error: {_OAuthCallbackHandler.error}", file=sys.stderr)
+        print(f"OAuth 錯誤：{_OAuthCallbackHandler.error}" if zh else f"OAuth error: {_OAuthCallbackHandler.error}", file=sys.stderr)
         sys.exit(1)
     if not _OAuthCallbackHandler.auth_code:
-        print("Error: No authorization code received (timeout?).", file=sys.stderr)
+        print("錯誤：未收到授權碼（可能已逾時）。" if zh else "Error: No authorization code received (timeout?).", file=sys.stderr)
         sys.exit(1)
 
-    print("Exchanging authorization code for tokens...", file=sys.stderr)
+    print("正在交換授權碼取得 token..." if zh else "Exchanging authorization code for tokens...", file=sys.stderr)
     token_data = {
         "grant_type": "authorization_code",
         "code": _OAuthCallbackHandler.auth_code,
@@ -435,7 +436,7 @@ def oauth_browser_flow(auth_url_base, token_url, client_id, client_secret, scope
         token_data["code_verifier"] = code_verifier
     token_resp = requests.post(token_url, data=token_data)
     if token_resp.status_code != 200:
-        print(f"Error exchanging code: {token_resp.status_code}", file=sys.stderr)
+        print(f"交換授權碼失敗：{token_resp.status_code}" if zh else f"Error exchanging code: {token_resp.status_code}", file=sys.stderr)
         print(token_resp.text, file=sys.stderr)
         sys.exit(1)
     result = token_resp.json()
