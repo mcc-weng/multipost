@@ -401,8 +401,19 @@ def oauth_browser_flow(auth_url_base, token_url, client_id, client_secret, scope
 
     server.timeout = 120
     print("Waiting for authorization (timeout: 120s)...", file=sys.stderr)
-    while _OAuthCallbackHandler.auth_code is None and _OAuthCallbackHandler.error is None:
-        server.handle_request()
+    print("Press Ctrl+C to cancel.\n", file=sys.stderr)
+    try:
+        while _OAuthCallbackHandler.auth_code is None and _OAuthCallbackHandler.error is None:
+            server.handle_request()
+            if _OAuthCallbackHandler.auth_code is None and _OAuthCallbackHandler.error is None:
+                # Timed out waiting for callback
+                print("Timed out waiting for authorization.", file=sys.stderr)
+                server.server_close()
+                return {}
+    except KeyboardInterrupt:
+        print("\nCancelled.", file=sys.stderr)
+        server.server_close()
+        return {}
     server.server_close()
 
     if _OAuthCallbackHandler.error:
