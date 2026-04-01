@@ -45,9 +45,9 @@ Install the skill so Claude can post for you:
 mkdir -p ~/.claude/skills/multipost && cp skill/SKILL.md ~/.claude/skills/multipost/SKILL.md
 ```
 
-然後在 Claude Code 裡面說「post to threads」或「發文到 Instagram」，Claude 會幫你發
+然後在 Claude Code 裡面說「post to threads」或「發文到 Instagram」，Claude 會用腳本帶你完成發文流程
 
-Then tell Claude "post to threads" or "post everywhere" and it handles the rest.
+Then tell Claude "post to threads" or "post everywhere" — Claude will use the scripts and take you through posting.
 
 ## 使用方式 / Usage
 
